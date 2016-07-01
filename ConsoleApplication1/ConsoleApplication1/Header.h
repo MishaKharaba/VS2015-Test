@@ -1,5 +1,54 @@
 #pragma once
 
+template<int v>
+struct Int2Type
+{
+    enum { value = v };
+};
+
+template<class T, class U>
+class Conversion
+{
+private:
+    typedef char Small;
+    class Big { char dummy[2]; };
+
+    // ReSharper disable CppFunctionIsNotImplemented
+    static Small Test(U);
+    static Big Test(...);
+    static T MakeT();
+    // ReSharper restore CppFunctionIsNotImplemented
+public:
+    // true if T is assignable to U
+    enum { exists = sizeof(Test(MakeT())) == sizeof(Small) };
+    enum { sameType = false };
+};
+
+template<class T>
+class Conversion<T, T>
+{
+public:
+    // true if T is assignable to U
+    enum { exists = true };
+    enum { sameType = true };
+};
+
+#define SUPERSUBCLASS(T, U) (Conversion<const U*, const T*>::exists && !Conversion<const T*, const void*>::sameType)
+
+template<bool, class T, class U> struct Select;
+
+template<class T, class U>
+struct Select<true, T, U>
+{
+    typedef T Result;
+};
+
+template<class T, class U>
+struct Select<false, T, U>
+{
+    typedef U Result;
+};
+
 class NullType {};
 
 template <class T, class U>
@@ -150,4 +199,84 @@ namespace TL
     public:
         typedef TypeList<Head, L2> Result;
     };
+
+    //Replace
+    template <class Tlist, class T, class U> struct Replace;
+
+    template<class T, class U>
+    struct Replace<NullType, T, U>
+    {
+        typedef NullType Result;
+    };
+
+    template <class Tail, class T, class U>
+    struct Replace<TypeList<T, Tail>, T, U>
+    {
+        typedef TypeList<U, Tail> Result;
+    };
+
+    template <class Head, class Tail, class T, class U>
+    struct Replace<TypeList<Head, Tail>, T, U>
+    {
+        typedef TypeList<Head, typename Replace<Tail, T, U>::Result> Result;
+    };
+
+    //ReplaceAll
+    template <class Tlist, class T, class U> struct ReplaceAll;
+
+    template<class T, class U>
+    struct ReplaceAll<NullType, T, U>
+    {
+        typedef NullType Result;
+    };
+
+    template <class Tail, class T, class U>
+    struct ReplaceAll<TypeList<T, Tail>, T, U>
+    {
+        typedef TypeList<U, typename ReplaceAll<Tail, T, U>::Result> Result;
+    };
+
+    template <class Head, class Tail, class T, class U>
+    struct ReplaceAll<TypeList<Head, Tail>, T, U>
+    {
+        typedef TypeList<Head, typename ReplaceAll<Tail, T, U>::Result> Result;
+    };
+
+    //MostDerived
+    template <class TList, class T> struct MostDerived;
+
+    template<class T>
+    struct MostDerived<NullType, T>
+    {
+        typedef T Result;
+    };
+
+    template<class Head, class Tail, class T>
+    struct MostDerived<TypeList<Head, Tail>, T>
+    {
+    private:
+        typedef typename MostDerived<Tail, T>::Result Candidate;
+    public:
+        typedef typename Select<SUPERSUBCLASS(Candidate, Head), Head, Candidate>::Result Result;
+    };
+
+    //DerivedToFront
+    template<class TList> struct  DerivedToFront;
+
+    template<>
+    struct DerivedToFront<NullType>
+    {
+        typedef NullType Result;
+    };
+
+    template<class Head, class Tail>
+    struct DerivedToFront<TypeList<Head, Tail>>
+    {
+    private:
+        typedef typename MostDerived<Tail, Head>::Result TheMostDerived;
+        typedef typename Replace<Tail, TheMostDerived, Head>::Result L;
+    public:
+        typedef TypeList<TheMostDerived, L> Result;
+    };
+
 }
